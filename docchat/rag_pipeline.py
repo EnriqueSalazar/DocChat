@@ -53,8 +53,8 @@ class RAGPipeline:
         # Generate a response from the LLM
         answer = self.llm.generate_response(query, context_text)
         
-        # Only return sources if an answer was actually found
-        if "I could not find an answer" in answer:
-            return answer, []
+        # Check for the specific [NO_ANSWER] token
+        if answer == "[NO_ANSWER]":
+            return "I could not find an answer to that in the documents.", []
         else:
             return answer, list(sources)

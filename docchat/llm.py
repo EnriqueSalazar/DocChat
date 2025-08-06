@@ -35,10 +35,10 @@ class LocalLLM:
         """
         prompt = f"""
         Instructions:
-        - You are a helpful assistant that answers questions based on the provided context.
+        - You are a helpful assistant that answers questions based ONLY on the provided context.
         - Your answers should be concise and directly address the user's question.
-        - If the answer to the question is not present in the context, you MUST say "I could not find an answer to that in the documents."
-        - Do not make up information or use any knowledge outside of the provided context.
+        - If the answer to the question is not present in the context, you MUST return the exact string "[NO_ANSWER]" and nothing else.
+        - Do not use any knowledge outside of the provided context.
 
         Context:
         ---
