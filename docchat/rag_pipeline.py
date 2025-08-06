@@ -53,4 +53,8 @@ class RAGPipeline:
         # Generate a response from the LLM
         answer = self.llm.generate_response(query, context_text)
         
-        return answer, list(sources)
+        # Only return sources if an answer was actually found
+        if "I could not find an answer" in answer:
+            return answer, []
+        else:
+            return answer, list(sources)
