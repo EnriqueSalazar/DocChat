@@ -1,0 +1,1 @@
+"""DocChat - A CLI application for chatting with local documents."""
