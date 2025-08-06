@@ -64,12 +64,13 @@ class ChromaDBManager:
                 )
         return self.collection
     
-    def add_embeddings(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: List[str]):
+    def add_embeddings(self, texts: List[str], embeddings: List[List[float]], metadatas: List[Dict[str, Any]], ids: List[str]):
         """
         Add text embeddings to the ChromaDB collection.
         
         Args:
             texts (List[str]): Texts to embed and store
+            embeddings (List[List[float]]): The embedding vectors
             metadatas (List[Dict[str, Any]]): Metadata for each text
             ids (List[str]): Unique IDs for each embedding
         """
@@ -78,7 +79,7 @@ class ChromaDBManager:
         
         # Add documents with metadata
         collection.add(
-            embeddings=[],
+            embeddings=embeddings,
             documents=texts,
             metadatas=metadatas,
             ids=ids

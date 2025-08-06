@@ -79,7 +79,7 @@ class DocChatApp:
                 metadatas = [{'file_path': str(file_path)} for _ in chunks]
                 ids = [f"{file_path}_{i}" for i in range(len(chunks))]
                 
-                self.chroma_manager.add_embeddings(chunks, metadatas, ids)
+                self.chroma_manager.add_embeddings(chunks, embeddings, metadatas, ids)
                 
                 # Add to SQLite DB
                 content_hash = self.db.calculate_file_hash(str(file_path))
