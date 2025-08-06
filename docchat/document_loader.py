@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import List, Tuple
 import csv
-import PyPDF2
+import pypdf
 import markdown
 
 class DocumentLoader:
@@ -61,10 +61,10 @@ class DocumentLoader:
         """Load content from a PDF file."""
         try:
             with open(path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = pypdf.PdfReader(f)
                 text = ""
                 for page in reader.pages:
-                    text += page.extract_text()
+                    text += page.extract_text() or ""
                 return text
         except Exception as e:
             raise ValueError(f"Could not parse PDF file: {str(e)}")

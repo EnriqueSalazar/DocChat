@@ -14,7 +14,7 @@ class EmbeddingGenerator:
             model_name (str): Name of the sentence transformer model to use
         """
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(model_name, device='cpu')
         
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
