@@ -1,4 +1,3 @@
-
 import os
 import sys
 from pathlib import Path
@@ -9,6 +8,17 @@ sys.path.insert(0, str(Path(__file__).parent))
 from docchat.app import DocChatApp
 
 
+def find_model_path() -> str:
+    """Find the first .gguf model file in the 'model' directory."""
+    model_dir = Path("model")
+    if not model_dir.exists() or not model_dir.is_dir():
+        return None
+
+    for file_path in model_dir.glob("*.gguf"):
+        return str(file_path)
+    
+    return None
+
 def main():
     """Main entry point for the DocChat CLI application."""
     # Get document folder from command line argument or use default
@@ -17,13 +27,15 @@ def main():
     else:
         docs_folder = "./docs"
         
-    # Get model path from environment variable or a default path
-    model_path = os.environ.get("LLM_MODEL_PATH", "path/to/your/llm_model.gguf")
+    # Find the model path
+    model_path = find_model_path()
     
-    if not Path(model_path).exists():
-        print(f"Error: Model file not found at {model_path}")
-        print("Please set the LLM_MODEL_PATH environment variable or place the model at the default path.")
+    if not model_path:
+        print("Error: No .gguf model file found in the 'model' directory.")
+        print("Please place your GGUF model file in a folder named 'model' in the project root.")
         sys.exit(1)
+    
+    print(f"Found model: {model_path}")
     
     app = DocChatApp(docs_folder, model_path)
     app.run()
