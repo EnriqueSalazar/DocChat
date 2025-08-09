@@ -215,5 +215,11 @@ docs/*
 history/
 chromadb/
 
+# App-generated artifacts
+docchat.db*
+logs/
+chat_history/
+
 # Local app database
+docchat.db
 docchat.db
