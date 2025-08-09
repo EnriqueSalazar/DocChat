@@ -214,3 +214,6 @@ docs/*
 # Ignore generated history and vectorstore
 history/
 chromadb/
+
+# Local app database
+docchat.db
