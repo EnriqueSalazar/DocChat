@@ -9,6 +9,9 @@ from docchat.embeddings import EmbeddingGenerator, ChromaDBManager
 from docchat.rag_pipeline import RAGPipeline
 from docchat.config import Config
 from docchat.logging_setup import setup_logging
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
 
 
 class DocChatApp:
@@ -18,6 +21,7 @@ class DocChatApp:
         self.config = config
         setup_logging(Path("./logs"))
         self.logger = logging.getLogger("DocChat")
+        self.console = Console()
 
         self.docs_folder = config.docs_path
         self.db = DocumentDatabase()
@@ -119,7 +123,8 @@ class DocChatApp:
     def chat_loop(self):
         """Handle the interactive chat session."""
         while True:
-            query = input("\nAsk a question: ").strip()
+            self.console.print("\n[bold cyan]Ask a question[/]: ", end="")
+            query = input("").strip()
             if query.lower() in ["exit", "quit"]:
                 self.logger.info("Exiting DocChat. Goodbye!")
                 break
@@ -129,13 +134,18 @@ class DocChatApp:
 
             answer, sources = self.rag_pipeline.ask(query, top_k=self.config.top_k)
 
-            print("\nAnswer:")
-            print(answer)
+            # Render answer in a panel
+            if answer:
+                try:
+                    # Render markdown when possible
+                    self.console.print(Panel.fit(Markdown(answer), title="[green]Answer[/]", border_style="green"))
+                except Exception:
+                    self.console.print(Panel.fit(answer, title="[green]Answer[/]", border_style="green"))
 
+            # Render sources list
             if sources:
-                print("\nSources:")
-                for source in sources:
-                    print(f"- {source}")
+                sources_text = "\n".join(f"• {s}" for s in sources)
+                self.console.print(Panel.fit(sources_text, title="[magenta]Sources[/]", border_style="magenta"))
 
             self.save_conversation(query, answer)
 
