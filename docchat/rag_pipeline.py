@@ -22,7 +22,7 @@ class RAGPipeline:
         self.chunker = TextChunker()
         self.llm = LocalLLM(llm_model_path)
         
-    def ask(self, query: str) -> Tuple[str, List[str]]:
+    def ask(self, query: str, top_k: int = 4) -> Tuple[str, List[str]]:
         """
         Process a user query through the RAG pipeline.
         
@@ -32,27 +32,28 @@ class RAGPipeline:
         Returns:
             A tuple containing the answer and a list of sources.
         """
-        # Query ChromaDB for relevant documents
-        results = self.chroma_manager.query(query)
-        
+        # Compute query embedding and query ChromaDB
+        q_emb = self.embedding_generator.model.encode([query])[0].tolist()
+        results = self.chroma_manager.query_by_embedding(q_emb, n_results=top_k)
+
         # Extract documents and metadata from results
-        if not results['documents'] or not results['documents'][0]:
+        if not results.get('documents') or not results['documents'][0]:
             return "I couldn't find any relevant information in your documents.", []
-            
+
         # Combine retrieved chunks into context
         context_chunks = results['documents'][0]
         sources = set()
-        
+
         if 'metadatas' in results and results['metadatas']:
             for metadata in results['metadatas'][0]:
                 if 'file_path' in metadata:
                     sources.add(metadata['file_path'])
-        
+
         context_text = "\n\n".join(context_chunks)
-        
+
         # Generate a response from the LLM
         answer = self.llm.generate_response(query, context_text)
-        
+
         # Check for the specific [NO_ANSWER] token
         if answer == "[NO_ANSWER]":
             return "I could not find an answer to that in the documents.", []

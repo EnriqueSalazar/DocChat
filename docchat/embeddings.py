@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import chromadb
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 
 class EmbeddingGenerator:
@@ -85,7 +85,7 @@ class ChromaDBManager:
             ids=ids
         )
     
-    def query(self, query_text: str, n_results: int = 4) -> List[Dict]:
+    def query(self, query_text: str, n_results: int = 4) -> Dict[str, Any]:
         """
         Query the ChromaDB for similar documents.
         
@@ -103,7 +103,7 @@ class ChromaDBManager:
         results = collection.query(
             query_texts=[query_text],
             n_results=n_results,
-            include=["documents", "metadatas"]
+            include=["documents", "metadatas", "ids"]
         )
         
         return results
@@ -120,3 +120,24 @@ class ChromaDBManager:
                 self.collection.delete(ids=ids)
             except Exception as e:
                 print(f"Error deleting from ChromaDB: {e}")
+
+    def query_by_embedding(self, embedding: List[float], n_results: int = 4) -> Dict[str, Any]:
+        """
+        Query using a precomputed embedding.
+        """
+        collection = self.get_or_create_collection()
+        return collection.query(
+            query_embeddings=[embedding],
+            n_results=n_results,
+            include=["documents", "metadatas", "ids"],
+        )
+
+    def delete_where_file(self, file_path: str):
+        """
+        Delete all chunks for a given file path.
+        """
+        collection = self.get_or_create_collection()
+        try:
+            collection.delete(where={"file_path": file_path})
+        except Exception as e:
+            print(f"Error deleting documents for file {file_path}: {e}")

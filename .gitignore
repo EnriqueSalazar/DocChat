@@ -210,3 +210,7 @@ __marimo__/
 docs/*
 # Except for the ones starting with "test"
 !docs/test*
+
+# Ignore generated history and vectorstore
+history/
+chromadb/

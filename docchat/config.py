@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import yaml
+
+
+@dataclass
+class Config:
+    docs_path: Path = Path("./docs")
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+    embedding_model: str = "all-MiniLM-L6-v2"
+    llm_model_path: Optional[Path] = None
+    top_k: int = 4
+    vectorstore_path: Path = Path("./chromadb")
+    history_dir: Path = Path("./history")
+
+    @staticmethod
+    def load(config_file: Path | str = "config.yaml") -> "Config":
+        path = Path(config_file)
+        cfg = Config()
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+
+            # Map YAML keys to dataclass fields if present
+            if "docs_path" in data:
+                cfg.docs_path = Path(data["docs_path"]).expanduser().resolve()
+            if "chunk_size" in data:
+                cfg.chunk_size = int(data["chunk_size"])
+            if "chunk_overlap" in data:
+                cfg.chunk_overlap = int(data["chunk_overlap"])
+            if "embedding_model" in data:
+                cfg.embedding_model = str(data["embedding_model"])  
+            if "llm_model_path" in data and data["llm_model_path"]:
+                cfg.llm_model_path = Path(data["llm_model_path"]).expanduser().resolve()
+            if "top_k" in data:
+                cfg.top_k = int(data["top_k"])
+            if "vectorstore_path" in data:
+                cfg.vectorstore_path = Path(data["vectorstore_path"]).expanduser().resolve()
+            if "history_dir" in data:
+                cfg.history_dir = Path(data["history_dir"]).expanduser().resolve()
+
+        return cfg
