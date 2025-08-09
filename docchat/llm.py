@@ -1,9 +1,24 @@
+import logging
+import os
 from llama_cpp import Llama
+try:
+    # Capability flags exposed by llama-cpp-python if compiled with GPU backends
+    from llama_cpp import LLAMA_CUBLAS, LLAMA_METAL, LLAMA_ROCM
+except Exception:  # pragma: no cover
+    LLAMA_CUBLAS = False
+    LLAMA_METAL = False
+    LLAMA_ROCM = False
 
 class LocalLLM:
     """Wrapper for a local GGUF-based Large Language Model."""
     
-    def __init__(self, model_path: str, n_ctx: int = 2048, n_threads: int = 4):
+    def __init__(
+        self,
+        model_path: str,
+        n_ctx: int | None = None,
+        n_threads: int | None = None,
+        n_gpu_layers: int | None = None,
+    ):
         """
         Initialize the local LLM. 
         
@@ -12,14 +27,41 @@ class LocalLLM:
             n_ctx (int): Context size for the model
             n_threads (int): Number of threads to use for generation
         """
+        logger = logging.getLogger("DocChat.LLM")
+
+        # Auto-tune defaults if not provided
+        auto_threads = max(1, min((os.cpu_count() or 4), 8))
+        threads = n_threads if n_threads is not None else auto_threads
+        ctx = n_ctx if n_ctx is not None else 2048
+
+        gpu_supported = bool(LLAMA_CUBLAS or LLAMA_ROCM or LLAMA_METAL)
+        # Offload all layers if GPU is available, otherwise CPU-only (0)
+        offload_layers = n_gpu_layers if n_gpu_layers is not None else (-1 if gpu_supported else 0)
+
+        logger.info(
+            "llama.cpp backends: CUBLAS=%s, ROCm=%s, METAL=%s", LLAMA_CUBLAS, LLAMA_ROCM, LLAMA_METAL
+        )
         try:
+            logger.info(
+                "Loading local LLM (llama-cpp): model_path=%s, n_ctx=%s, n_threads=%s, n_gpu_layers=%s, use_mmap=%s, verbose=%s",
+                model_path,
+                ctx,
+                threads,
+                offload_layers,
+                True,
+                False,
+            )
             self.llm = Llama(
                 model_path=model_path,
-                n_ctx=n_ctx,
-                n_threads=n_threads,
-                verbose=False
+                n_ctx=ctx,
+                n_threads=threads,
+                n_gpu_layers=offload_layers,
+                use_mmap=True,
+                verbose=False,
             )
+            logger.info("Local LLM loaded successfully.")
         except Exception as e:
+            logger.exception("Failed to load local LLM.")
             raise RuntimeError(f"Failed to load LLM model from {model_path}: {e}")
             
     def generate_response(self, query: str, context: str) -> str:
