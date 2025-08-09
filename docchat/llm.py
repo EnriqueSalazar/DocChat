@@ -54,7 +54,8 @@ class LocalLLM:
             response = self.llm(
                 prompt,
                 max_tokens=512,
-                stop=["\n", "Question:", "User:"],
+                # Avoid stopping on every newline; only stop on clear section markers if they appear
+                stop=["Question:", "User:"],
                 echo=False
             )
             

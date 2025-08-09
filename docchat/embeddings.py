@@ -103,7 +103,7 @@ class ChromaDBManager:
         results = collection.query(
             query_texts=[query_text],
             n_results=n_results,
-            include=["documents", "metadatas", "ids"]
+            include=["documents", "metadatas"]
         )
         
         return results
@@ -129,7 +129,7 @@ class ChromaDBManager:
         return collection.query(
             query_embeddings=[embedding],
             n_results=n_results,
-            include=["documents", "metadatas", "ids"],
+            include=["documents", "metadatas"],
         )
 
     def delete_where_file(self, file_path: str):
