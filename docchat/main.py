@@ -46,13 +46,9 @@ def ingest(
     cfg = build_config(docs_folder)
     app = DocChatApp(cfg)
     app.process_documents()
-    # Pause before starting chat only if interactive
+    # Separator instead of pause
     if sys.stdin.isatty():
-        try:
-            typer.echo("\nIngestion complete. Press Enter to continue to chat...")
-            input()
-        except (KeyboardInterrupt, EOFError):
-            raise typer.Exit(1)
+        typer.echo("\n--- Ingestion complete ---\n")
     else:
         typer.echo("(Non-interactive mode: skipping chat after ingestion)")
     # After ingestion always go to chat if interactive
@@ -86,12 +82,8 @@ def main_callback(ctx: typer.Context, docs_folder: Annotated[Path, typer.Option(
     if not sys.stdin.isatty():
         typer.echo("(Non-interactive mode: chat skipped)")
         return
-    # Interactive: pause then chat
-    try:
-        typer.echo("\nPress Enter to start chat...")
-        input()
-    except (KeyboardInterrupt, EOFError):
-        raise typer.Exit(1)
+    # Interactive: no pause, just a blank line separator then chat
+    typer.echo("\n")
     cfg = build_config(docs_folder)
     if not cfg.llm_model_path:
         typer.secho("No GGUF model found. Set llm_model_path in config.yaml or put a .gguf in ./model", fg=typer.colors.RED)

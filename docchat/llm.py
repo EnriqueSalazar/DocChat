@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from llama_cpp import Llama
 try:
     # Capability flags exposed by llama-cpp-python if compiled with GPU backends
@@ -102,10 +103,25 @@ Answer:
                 echo=False,
             )
             answer = response['choices'][0]['text'].strip()
-            if "[NO_ANSWER]" in answer and len(answer) > len("[NO_ANSWER]"):
-                cleaned = answer.replace("[NO_ANSWER]", "").strip()
+
+            # Normalize common misspelling variants of the no-answer token produced by model
+            upper = answer.upper().strip()
+            variants = {"[NO_ANSWER]", "[NO_ANSWAN]", "[NO_ANSWE]"}
+            if upper in variants:
+                return "[NO_ANSWER]"
+
+            # If a variant token appears alongside other content, strip it out
+            token_pattern = re.compile(r"\[NO_[A-Z]+\]")
+            if token_pattern.search(upper):
+                # Remove only exact tokens, leave surrounding explanatory text
+                cleaned = token_pattern.sub("", answer).strip()
                 if cleaned:
                     answer = cleaned
+            # Also handle the canonical [NO_ANSWER] embedded in longer text
+            if "[NO_ANSWER]" in answer and len(answer) > len("[NO_ANSWER]"):
+                cleaned2 = answer.replace("[NO_ANSWER]", "").strip()
+                if cleaned2:
+                    answer = cleaned2
             return answer
         except Exception as e:
             print(f"Error during LLM generation: {e}")
