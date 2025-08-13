@@ -30,27 +30,42 @@ class LocalLLM:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         torch_dtype = torch.bfloat16 if dtype == "bfloat16" and torch.cuda.is_available() else torch.float16 if dtype == "float16" and torch.cuda.is_available() else torch.float32
         logger.info("Loading RedPajama model repo=%s device=%s dtype=%s", model_repo_or_path, self.device, torch_dtype)
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_repo_or_path, use_fast=True)
-            self.model = AutoModelForCausalLM.from_pretrained(
+
+        def _do_load(target_device: str):
+            tok = AutoTokenizer.from_pretrained(model_repo_or_path, use_fast=True)
+            mdl = AutoModelForCausalLM.from_pretrained(
                 model_repo_or_path,
-                torch_dtype=torch_dtype,
+                torch_dtype=torch_dtype if target_device != 'cpu' else torch.float32,
                 low_cpu_mem_usage=True,
             )
-            if self.device == 'cuda':
-                self.model.to(self.device)
-            # CPU compile (PyTorch 2+) for faster generation after first run
-            if self.device == 'cpu' and hasattr(torch, 'compile'):
+            if target_device == 'cuda':
+                mdl.to('cuda')
+            if target_device == 'cpu' and hasattr(torch, 'compile'):
                 try:
-                    self.model = torch.compile(self.model, mode='reduce-overhead')
+                    mdl = torch.compile(mdl, mode='reduce-overhead')
                     logger.info('Applied torch.compile for CPU optimization.')
                 except Exception:
                     pass
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            logger.info("Model loaded.")
+            if tok.pad_token is None:
+                tok.pad_token = tok.eos_token
+            return tok, mdl
+
+        try:
+            # Attempt GPU load if selected
+            self.tokenizer, self.model = _do_load(self.device)
+            # Quick capability check: attempt tiny forward pass; if fails fallback
+            if self.device == 'cuda':
+                try:
+                    test_ids = self.tokenizer("hello", return_tensors="pt").to('cuda')
+                    with torch.no_grad():
+                        _ = self.model(**test_ids)
+                except Exception as gpu_err:
+                    logger.warning("CUDA model test failed (%s). Falling back to CPU.", gpu_err)
+                    self.device = 'cpu'
+                    self.tokenizer, self.model = _do_load('cpu')
+            logger.info("Model loaded (device=%s).", self.device)
         except Exception as e:
-            logger.exception("Failed to load RedPajama model")
+            logger.exception("Failed to load RedPajama model; last attempt on device=%s", self.device)
             raise RuntimeError(f"Failed to load model {model_repo_or_path}: {e}")
             
     def generate_response(self, query: str, context: str) -> str:
@@ -93,8 +108,36 @@ Context:\n{context}\nQuestion: {query}\nJSON:"""
         gen_kwargs = dict(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False, pad_token_id=self.tokenizer.eos_token_id, streamer=streamer)
 
         def _generate():
-            with torch.no_grad():
-                self.model.generate(**gen_kwargs)
+            tried_fallback = False
+            while True:
+                try:
+                    with torch.no_grad():
+                        self.model.generate(**gen_kwargs)
+                    break
+                except RuntimeError as rte:
+                    # Detect CUDA kernel errors and fallback to CPU once
+                    if ("CUDA error" in str(rte) or "no kernel image" in str(rte)) and self.device == 'cuda' and not tried_fallback:
+                        print("[LLM] CUDA generation error; falling back to CPU reload.")
+                        self.device = 'cpu'
+                        try:
+                            # Reload on CPU
+                            self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer.name_or_path, use_fast=True)
+                            self.model = AutoModelForCausalLM.from_pretrained(self.tokenizer.name_or_path, torch_dtype=torch.float32, low_cpu_mem_usage=True)
+                            if hasattr(torch, 'compile'):
+                                try:
+                                    self.model = torch.compile(self.model, mode='reduce-overhead')
+                                except Exception:
+                                    pass
+                            gen_inputs = self.tokenizer(prompt, return_tensors="pt").to('cpu')
+                            gen_kwargs.update(gen_inputs)
+                            gen_kwargs['streamer'] = streamer
+                            tried_fallback = True
+                            continue
+                        except Exception as reload_err:
+                            print(f"[LLM] CPU fallback reload failed: {reload_err}")
+                            break
+                    else:
+                        break
 
         thread = threading.Thread(target=_generate)
         thread.start()

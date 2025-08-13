@@ -30,14 +30,21 @@ def download_redpajama(target_dir: Path) -> List[Path]:
         if dest.exists():
             downloaded.append(dest)
             continue
-        resp = requests.get(url, stream=True, timeout=60)
-        resp.raise_for_status()
-        total = int(resp.headers.get("content-length", 0))
-        chunk = 1024 * 1024
-        with open(dest, "wb") as f, tqdm(total=total, unit="B", unit_scale=True, desc=fname) as pbar:
-            for part in resp.iter_content(chunk_size=chunk):
-                if part:
-                    f.write(part)
-                    pbar.update(len(part))
-        downloaded.append(dest)
+        try:
+            resp = requests.get(url, stream=True, timeout=60)
+            if resp.status_code == 404:
+                # Shard naming may differ; skip and rely on HF transformer auto-download
+                print(f"[Downloader] Skipping missing file (404): {fname}")
+                continue
+            resp.raise_for_status()
+            total = int(resp.headers.get("content-length", 0))
+            chunk = 1024 * 1024
+            with open(dest, "wb") as f, tqdm(total=total, unit="B", unit_scale=True, desc=fname) as pbar:
+                for part in resp.iter_content(chunk_size=chunk):
+                    if part:
+                        f.write(part)
+                        pbar.update(len(part))
+            downloaded.append(dest)
+        except Exception as e:
+            print(f"[Downloader] Error downloading {fname}: {e}. Skipping.")
     return downloaded

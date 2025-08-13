@@ -32,16 +32,24 @@ class DocChatApp:
         self.chroma_manager = ChromaDBManager(persist_directory=str(config.vectorstore_path))
     # Determine model identifier (HF repo or local downloaded directory)
         model_id = config.llm_model_name if hasattr(config, 'llm_model_name') else "togethercomputer/RedPajama-INCITE-7B-Instruct"
+        # Allow environment override for testing with smaller models
+        import os as _os
+        env_override = _os.getenv("DOCCHAT_MODEL_NAME")
+        if env_override:
+            self.logger.info("Overriding model name via DOCCHAT_MODEL_NAME=%s", env_override)
+            model_id = env_override
         # Optional explicit download to local folder to avoid repeated cache fetch; optimize for faster generation
         if getattr(config, 'llm_auto_download', True):
             local_dir = Path('./model/redpajama')
             if not local_dir.exists() or not any(local_dir.glob('pytorch_model-*.bin')):
-                self.logger.info("RedPajama model missing locally. Downloading shards to %s ...", local_dir)
+                self.logger.info("RedPajama model missing locally. Downloading support/tokenizer files to %s ...", local_dir)
                 download_redpajama(local_dir)
+            # Decide if we can use local directory (must contain weight shards or safetensors)
+            has_weights = any(local_dir.glob('pytorch_model*.bin')) or any(local_dir.glob('*.safetensors')) or (local_dir / 'model.safetensors').exists()
+            if has_weights:
                 model_id = str(local_dir.resolve())
             else:
-                # Use local copy if present
-                model_id = str(local_dir.resolve())
+                self.logger.warning("Local redpajama directory lacks weight shards; falling back to remote repo %s", model_id)
         self.rag_pipeline = RAGPipeline(
             embedding_model=config.embedding_model,
             chroma_persist_dir=str(config.vectorstore_path),

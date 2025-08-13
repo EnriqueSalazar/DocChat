@@ -221,7 +221,7 @@ logs/
 chat_history/
 
 # Local model weights (do not commit large binaries)
-model/*.gguf
+model/*
 
 # Local app database
 docchat.db
