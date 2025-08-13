@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import chromadb
+from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 import os
 
@@ -45,7 +46,11 @@ class ChromaDBManager:
             persist_directory (str): Directory to store the database
         """
         self.persist_directory = persist_directory
-        self.client = chromadb.PersistentClient(path=persist_directory)
+        # Disable Chroma anonymized telemetry explicitly
+        self.client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=Settings(anonymized_telemetry=False)
+        )
         self.collection_name = "documents"
         self.collection = None
         

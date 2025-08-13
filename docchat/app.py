@@ -7,7 +7,7 @@ from docchat.document_loader import DocumentLoader
 from docchat.chunking import TextChunker
 from docchat.embeddings import EmbeddingGenerator, ChromaDBManager
 from docchat.rag_pipeline import RAGPipeline
-from docchat.model_downloader import download_redpajama
+from docchat.model_downloader import ensure_local_model
 from docchat.config import Config
 from docchat.logging_setup import setup_logging
 from rich.console import Console
@@ -18,45 +18,71 @@ from rich.markdown import Markdown
 class DocChatApp:
     """Main application class for DocChat."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, verbose: bool = False, stream_mode: bool = False):
         self.config = config
-        setup_logging(Path("./logs"))
+        # Configure logging early; force reconfigure to adjust verbosity
+        setup_logging(Path("./logs"), level=logging.DEBUG if verbose else logging.INFO, force=True)
         self.logger = logging.getLogger("DocChat")
+        self.verbose = verbose
         self.console = Console()
+        self.stream_mode = stream_mode
 
+        # Core components
         self.docs_folder = config.docs_path
         self.db = DocumentDatabase()
         self.loader = DocumentLoader()
         self.chunker = TextChunker(chunk_size=config.chunk_size, overlap=config.chunk_overlap)
         self.embedding_generator = EmbeddingGenerator(model_name=config.embedding_model)
         self.chroma_manager = ChromaDBManager(persist_directory=str(config.vectorstore_path))
-    # Determine model identifier (HF repo or local downloaded directory)
-        model_id = config.llm_model_name if hasattr(config, 'llm_model_name') else "togethercomputer/RedPajama-INCITE-7B-Instruct"
+
+        # Determine model identifier (HF repo or local downloaded directory)
+        model_id = getattr(config, 'llm_model_name', "togethercomputer/RedPajama-INCITE-7B-Instruct")
+
         # Allow environment override for testing with smaller models
         import os as _os
         env_override = _os.getenv("DOCCHAT_MODEL_NAME")
         if env_override:
             self.logger.info("Overriding model name via DOCCHAT_MODEL_NAME=%s", env_override)
             model_id = env_override
+
         # Optional explicit download to local folder to avoid repeated cache fetch; optimize for faster generation
         if getattr(config, 'llm_auto_download', True):
             local_dir = Path('./model/redpajama')
-            if not local_dir.exists() or not any(local_dir.glob('pytorch_model-*.bin')):
-                self.logger.info("RedPajama model missing locally. Downloading support/tokenizer files to %s ...", local_dir)
-                download_redpajama(local_dir)
-            # Decide if we can use local directory (must contain weight shards or safetensors)
-            has_weights = any(local_dir.glob('pytorch_model*.bin')) or any(local_dir.glob('*.safetensors')) or (local_dir / 'model.safetensors').exists()
-            if has_weights:
-                model_id = str(local_dir.resolve())
-            else:
-                self.logger.warning("Local redpajama directory lacks weight shards; falling back to remote repo %s", model_id)
+            try:
+                model_path = ensure_local_model(model_id, local_dir)
+                model_id = str(model_path)
+            except Exception as e:
+                self.logger.warning("Falling back to remote model due to snapshot error: %s", e)
+
+        if self.verbose:
+            self.logger.debug(
+                "Initializing RAG pipeline with model_id=%s embedding_model=%s", model_id, config.embedding_model
+            )
+
         self.rag_pipeline = RAGPipeline(
             embedding_model=config.embedding_model,
             chroma_persist_dir=str(config.vectorstore_path),
             llm_model_path=model_id,
             llm_max_new_tokens=config.llm_max_new_tokens,
             cpu_threads=config.cpu_threads,
+            enable_gpu=config.enable_gpu,
+            context_max_chars=config.context_max_chars,
+            dynamic_quantization=config.cpu_dynamic_quantization,
+            llm_compile=False,
         )
+
+        # Wire adaptive configuration if enabled
+        if config.adaptive_enable:
+            adaptive_cfg = {
+                'enable': True,
+                'latency_target': config.adaptive_latency_target,
+                'min_new_tokens': config.adaptive_min_new_tokens,
+                'max_new_tokens': config.adaptive_max_new_tokens,
+                'growth_factor': config.adaptive_growth_factor,
+                'shrink_factor': config.adaptive_shrink_factor,
+                'ema_alpha': config.adaptive_ema_alpha,
+            }
+            self.rag_pipeline.configure_adaptive(adaptive_cfg)
 
         # Ensure the document and history folders exist
         self.docs_folder.mkdir(parents=True, exist_ok=True)
@@ -153,25 +179,38 @@ class DocChatApp:
 
             if not query:
                 continue
-
-            # Streamed answer assembly
-            streamed_answer = ""
-            sources_final = []
-            # Temporary live panel replacement: incremental print
-            for chunk, maybe_sources in self.rag_pipeline.ask_stream(query, top_k=self.config.top_k):
-                if maybe_sources is not None and not sources_final:
-                    sources_final = maybe_sources
-                # If this is final processed token (maybe full answer) after streaming, still append
-                if chunk:
-                    print(chunk, end="", flush=True)
-                    streamed_answer += chunk
-            print()  # newline after streaming
-            processed_answer = self.rag_pipeline.llm._post_process(streamed_answer)
-            # Display sources panel
-            if sources_final:
-                sources_text = "\n".join(f"• {s}" for s in sources_final)
-                self.console.print(Panel.fit(sources_text, title="[magenta]Sources[/]", border_style="magenta"))
-            self.save_conversation(query, processed_answer)
+            if self.stream_mode:
+                # Streaming answer
+                self.console.print("[yellow]Generating (stream)...[/]")
+                pieces = []
+                sources_final = []
+                for piece, sources in self.rag_pipeline.ask_stream(query, top_k=self.config.top_k):
+                    if sources is None:
+                        # partial text
+                        pieces.append(piece)
+                        self.console.print(piece, end="", style="green")
+                    else:
+                        # final result
+                        final_answer = piece
+                        sources_final = sources
+                        if final_answer:
+                            self.console.print("")
+                            self.console.print(f"[bold green]{final_answer}[/]")
+                        break
+                if sources_final:
+                    sources_text = "\n".join(f"• {s}" for s in sources_final)
+                    self.console.print(Panel.fit(sources_text, title="[magenta]Sources[/]", border_style="magenta"))
+                self.save_conversation(query, ''.join(pieces))
+            else:
+                # Non-stream mode: show quick status line before possibly long generation
+                self.console.print("[yellow]Generating...[/]", end="", style="yellow")
+                answer, sources = self.rag_pipeline.ask(query, top_k=self.config.top_k)
+                self.console.print("")  # newline after generation
+                self.console.print(f"\n[bold green]{answer}[/]")
+                if sources:
+                    sources_text = "\n".join(f"• {s}" for s in sources)
+                    self.console.print(Panel.fit(sources_text, title="[magenta]Sources[/]", border_style="magenta"))
+                self.save_conversation(query, answer)
 
     def save_conversation(self, query: str, answer: str):
         """Save the conversation to a daily log file."""

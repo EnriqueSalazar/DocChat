@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import typer
 from typing_extensions import Annotated
+import logging
 
 # Add the current directory to Python path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent))
@@ -27,10 +28,11 @@ def build_config(docs_folder: Path | None) -> Config:
 @cli.command()
 def ingest(
     docs_folder: Annotated[Path, typer.Argument(help="Folder with documents", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True)] = Path("./docs"),
+    verbose: Annotated[bool, typer.Option("--verbose", help="Enable verbose debug logging")] = False,
 ):
     """Ingest documents then start chat."""
     cfg = build_config(docs_folder)
-    app = DocChatApp(cfg)
+    app = DocChatApp(cfg, verbose=verbose)
     app.process_documents()
     # Separator instead of pause
     if sys.stdin.isatty():
@@ -45,15 +47,17 @@ def ingest(
 @cli.command()
 def chat(
     docs_folder: Annotated[Path, typer.Argument(help="Folder with documents", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True)] = Path("./docs"),
+    verbose: Annotated[bool, typer.Option("--verbose", help="Enable verbose debug logging")] = False,
+    stream: Annotated[bool, typer.Option("--stream", help="Stream tokens as they are generated")] = False,
 ):
     """Start an interactive chat session using local LLM over your docs."""
     cfg = build_config(docs_folder)
-    app = DocChatApp(cfg)
+    app = DocChatApp(cfg, verbose=verbose, stream_mode=stream)
     app.run()
 
 
 @cli.callback(invoke_without_command=True)
-def main_callback(ctx: typer.Context, docs_folder: Annotated[Path, typer.Option(help="Folder with documents", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True)] = Path("./docs")):
+def main_callback(ctx: typer.Context, docs_folder: Annotated[Path, typer.Option(help="Folder with documents", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True)] = Path("./docs"), verbose: Annotated[bool, typer.Option("--verbose", help="Enable verbose debug logging")] = False, stream: Annotated[bool, typer.Option("--stream", help="Stream tokens as they are generated")] = False):
     """Default behavior: show help (implicitly) then launch chat if no subcommand supplied."""
     if ctx.invoked_subcommand is not None:
         return  # Another command will run
@@ -65,7 +69,7 @@ def main_callback(ctx: typer.Context, docs_folder: Annotated[Path, typer.Option(
     # Interactive: no pause, just a blank line separator then chat
     typer.echo("\n")
     cfg = build_config(docs_folder)
-    app = DocChatApp(cfg)
+    app = DocChatApp(cfg, verbose=verbose, stream_mode=stream)
     app.run()
 
 if __name__ == "__main__":
