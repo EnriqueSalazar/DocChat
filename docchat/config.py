@@ -14,6 +14,8 @@ class Config:
     chunk_overlap: int = 200
     embedding_model: str = "all-MiniLM-L6-v2"
     llm_model_path: Optional[Path] = None
+    llm_model_name: str = "togethercomputer/RedPajama-INCITE-7B-Instruct"
+    llm_auto_download: bool = True
     top_k: int = 4
     vectorstore_path: Path = Path("./chromadb")
     history_dir: Path = Path("./history")
@@ -37,6 +39,10 @@ class Config:
                 cfg.embedding_model = str(data["embedding_model"])  
             if "llm_model_path" in data and data["llm_model_path"]:
                 cfg.llm_model_path = Path(data["llm_model_path"]).expanduser().resolve()
+            if "llm_model_name" in data and data["llm_model_name"]:
+                cfg.llm_model_name = str(data["llm_model_name"])  # HF repo id
+            if "llm_auto_download" in data:
+                cfg.llm_auto_download = bool(data["llm_auto_download"])
             if "top_k" in data:
                 cfg.top_k = int(data["top_k"])
             if "vectorstore_path" in data:

@@ -29,10 +29,12 @@ class DocChatApp:
         self.chunker = TextChunker(chunk_size=config.chunk_size, overlap=config.chunk_overlap)
         self.embedding_generator = EmbeddingGenerator(model_name=config.embedding_model)
         self.chroma_manager = ChromaDBManager(persist_directory=str(config.vectorstore_path))
+        # Use model name (HF repo) instead of local GGUF path for RedPajama
+        model_id = config.llm_model_name if hasattr(config, 'llm_model_name') else "togethercomputer/RedPajama-INCITE-7B-Instruct"
         self.rag_pipeline = RAGPipeline(
             embedding_model=config.embedding_model,
             chroma_persist_dir=str(config.vectorstore_path),
-            llm_model_path=str(config.llm_model_path) if config.llm_model_path else ""
+            llm_model_path=model_id,
         )
 
         # Ensure the document and history folders exist

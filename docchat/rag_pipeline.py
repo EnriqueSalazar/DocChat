@@ -6,16 +6,16 @@ from .llm import LocalLLM
 class RAGPipeline:
     """Handles the Retrieval Augmented Generation pipeline."""
     
-    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2", 
+    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2",
                  chroma_persist_dir: str = "./chromadb",
-                 llm_model_path: str = "path/to/your/llm_model.gguf"):
+                 llm_model_path: str = "togethercomputer/RedPajama-INCITE-7B-Instruct"):
         """
         Initialize the RAG pipeline.
         
         Args:
-            embedding_model (str): Name of the sentence transformer model to use
+            embedding_model (str): Sentence transformer model name
             chroma_persist_dir (str): Directory for ChromaDB persistence
-            llm_model_path (str): Path to the GGUF model file for the LLM
+            llm_model_path (str): HF model repo or local path for RedPajama
         """
         self.embedding_generator = EmbeddingGenerator(embedding_model)
         self.chroma_manager = ChromaDBManager(chroma_persist_dir)
