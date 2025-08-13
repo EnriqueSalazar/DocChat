@@ -30,7 +30,7 @@ class DocChatApp:
         self.chunker = TextChunker(chunk_size=config.chunk_size, overlap=config.chunk_overlap)
         self.embedding_generator = EmbeddingGenerator(model_name=config.embedding_model)
         self.chroma_manager = ChromaDBManager(persist_directory=str(config.vectorstore_path))
-        # Use model name (HF repo) instead of local GGUF path for RedPajama
+    # Determine model identifier (HF repo or local downloaded directory)
         model_id = config.llm_model_name if hasattr(config, 'llm_model_name') else "togethercomputer/RedPajama-INCITE-7B-Instruct"
         # Optional explicit download to local folder to avoid repeated cache fetch; optimize for faster generation
         if getattr(config, 'llm_auto_download', True):
@@ -144,22 +144,24 @@ class DocChatApp:
             if not query:
                 continue
 
-            answer, sources = self.rag_pipeline.ask(query, top_k=self.config.top_k)
-
-            # Render answer in a panel
-            if answer:
-                try:
-                    # Render markdown when possible
-                    self.console.print(Panel.fit(Markdown(answer), title="[green]Answer[/]", border_style="green"))
-                except Exception:
-                    self.console.print(Panel.fit(answer, title="[green]Answer[/]", border_style="green"))
-
-            # Render sources list
-            if sources:
-                sources_text = "\n".join(f"• {s}" for s in sources)
+            # Streamed answer assembly
+            streamed_answer = ""
+            sources_final = []
+            # Temporary live panel replacement: incremental print
+            for chunk, maybe_sources in self.rag_pipeline.ask_stream(query, top_k=self.config.top_k):
+                if maybe_sources is not None and not sources_final:
+                    sources_final = maybe_sources
+                # If this is final processed token (maybe full answer) after streaming, still append
+                if chunk:
+                    print(chunk, end="", flush=True)
+                    streamed_answer += chunk
+            print()  # newline after streaming
+            processed_answer = self.rag_pipeline.llm._post_process(streamed_answer)
+            # Display sources panel
+            if sources_final:
+                sources_text = "\n".join(f"• {s}" for s in sources_final)
                 self.console.print(Panel.fit(sources_text, title="[magenta]Sources[/]", border_style="magenta"))
-
-            self.save_conversation(query, answer)
+            self.save_conversation(query, processed_answer)
 
     def save_conversation(self, query: str, answer: str):
         """Save the conversation to a daily log file."""

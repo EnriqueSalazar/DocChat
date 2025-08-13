@@ -59,3 +59,33 @@ class RAGPipeline:
             return "I could not find an answer to that in the documents.", []
         else:
             return answer, list(sources)
+
+    def ask_stream(self, query: str, top_k: int = 4):
+        """Stream answer tokens. Yields (partial_text, sources or None). Final yield returns full answer & sources."""
+        q_emb = self.embedding_generator.model.encode([query])[0].tolist()
+        results = self.chroma_manager.query_by_embedding(q_emb, n_results=top_k)
+        if not results.get('documents') or not results['documents'][0]:
+            yield "I couldn't find any relevant information in your documents.", []
+            return
+        context_chunks = results['documents'][0]
+        sources = set()
+        if 'metadatas' in results and results['metadatas']:
+            for metadata in results['metadatas'][0]:
+                if 'file_path' in metadata:
+                    sources.add(metadata['file_path'])
+        context_text = "\n\n".join(context_chunks)
+        streamer = self.llm.stream_response(query, context_text)
+        final_answer = ""
+        try:
+            for piece in streamer:
+                final_answer += piece
+                yield piece, None
+            # After generator finishes, streamer returns final processed answer via return value
+            # Python generators raise StopIteration with value prop; we can't capture here, so post-process again
+            processed = self.llm._post_process(final_answer)
+            if processed == "[NO_ANSWER]":
+                yield "[NO_ANSWER]", []
+            else:
+                yield processed, list(sources)
+        except Exception:
+            yield "Error streaming response.", []
