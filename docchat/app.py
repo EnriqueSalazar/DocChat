@@ -54,6 +54,8 @@ class DocChatApp:
             embedding_model=config.embedding_model,
             chroma_persist_dir=str(config.vectorstore_path),
             llm_model_path=model_id,
+            llm_max_new_tokens=config.llm_max_new_tokens,
+            cpu_threads=config.cpu_threads,
         )
 
         # Ensure the document and history folders exist

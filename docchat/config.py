@@ -16,6 +16,8 @@ class Config:
     llm_model_path: Optional[Path] = None
     llm_model_name: str = "togethercomputer/RedPajama-INCITE-7B-Instruct"
     llm_auto_download: bool = True
+    llm_max_new_tokens: int = 384
+    cpu_threads: int | None = None  # allow override of torch thread count
     top_k: int = 4
     vectorstore_path: Path = Path("./chromadb")
     history_dir: Path = Path("./history")
@@ -43,6 +45,10 @@ class Config:
                 cfg.llm_model_name = str(data["llm_model_name"])  # HF repo id
             if "llm_auto_download" in data:
                 cfg.llm_auto_download = bool(data["llm_auto_download"])
+            if "llm_max_new_tokens" in data:
+                cfg.llm_max_new_tokens = int(data["llm_max_new_tokens"])
+            if "cpu_threads" in data and data["cpu_threads"] is not None:
+                cfg.cpu_threads = int(data["cpu_threads"])
             if "top_k" in data:
                 cfg.top_k = int(data["top_k"])
             if "vectorstore_path" in data:

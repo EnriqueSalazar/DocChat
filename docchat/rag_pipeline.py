@@ -6,21 +6,31 @@ from .llm import LocalLLM
 class RAGPipeline:
     """Handles the Retrieval Augmented Generation pipeline."""
     
-    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2",
-                 chroma_persist_dir: str = "./chromadb",
-                 llm_model_path: str = "togethercomputer/RedPajama-INCITE-7B-Instruct"):
-        """
-        Initialize the RAG pipeline.
-        
+    def __init__(
+        self,
+        embedding_model: str = "all-MiniLM-L6-v2",
+        chroma_persist_dir: str = "./chromadb",
+        llm_model_path: str = "togethercomputer/RedPajama-INCITE-7B-Instruct",
+        llm_max_new_tokens: int = 512,
+        cpu_threads: int | None = None,
+    ) -> None:
+        """Initialize the RAG pipeline.
+
         Args:
-            embedding_model (str): Sentence transformer model name
-            chroma_persist_dir (str): Directory for ChromaDB persistence
-            llm_model_path (str): HF model repo or local path for RedPajama
+            embedding_model: Sentence transformer model name.
+            chroma_persist_dir: Directory for ChromaDB persistence.
+            llm_model_path: HF model repo or local path for RedPajama.
+            llm_max_new_tokens: Max new tokens for generation.
+            cpu_threads: Optional override for torch CPU threads.
         """
         self.embedding_generator = EmbeddingGenerator(embedding_model)
         self.chroma_manager = ChromaDBManager(chroma_persist_dir)
         self.chunker = TextChunker()
-        self.llm = LocalLLM(llm_model_path)
+        self.llm = LocalLLM(
+            llm_model_path,
+            max_new_tokens=llm_max_new_tokens,
+            cpu_threads=cpu_threads,
+        )
         
     def ask(self, query: str, top_k: int = 4) -> Tuple[str, List[str]]:
         """
