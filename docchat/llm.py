@@ -76,35 +76,37 @@ class LocalLLM:
             str: The generated answer
         """
         prompt = f"""
-        Instructions:
-        - You are a helpful assistant that answers questions based ONLY on the provided context.
-        - Your answers should be concise and directly address the user's question.
-        - If the answer to the question is not present in the context, you MUST return the exact string "[NO_ANSWER]" and nothing else.
-        - Do not use any knowledge outside of the provided context.
+You are a helpful assistant that answers questions using ONLY the context.
 
-        Context:
-        ---
-        {context}
-        ---
-        
-        Question: {query}
-        
-        Answer:
-        """
-        
+Rules:
+1. If (and only if) the context does NOT contain the information needed, output exactly:
+[NO_ANSWER]
+2. Otherwise output ONLY the answer (no preamble, no mention of the rules, do NOT repeat [NO_ANSWER]).
+3. Be concise but complete.
+
+Context:
+---
+{context}
+---
+
+Question: {query}
+
+Answer:
+"""
+
         try:
             response = self.llm(
                 prompt,
                 max_tokens=512,
-                # Avoid stopping on every newline; only stop on clear section markers if they appear
                 stop=["Question:", "User:"],
-                echo=False
+                echo=False,
             )
-            
-            # Extract the text from the response
             answer = response['choices'][0]['text'].strip()
+            if "[NO_ANSWER]" in answer and len(answer) > len("[NO_ANSWER]"):
+                cleaned = answer.replace("[NO_ANSWER]", "").strip()
+                if cleaned:
+                    answer = cleaned
             return answer
-            
         except Exception as e:
             print(f"Error during LLM generation: {e}")
             return "I encountered an error while generating a response."
