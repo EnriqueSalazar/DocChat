@@ -35,7 +35,16 @@ class LocalLLM:
                 model_repo_or_path,
                 torch_dtype=torch_dtype,
                 low_cpu_mem_usage=True,
-            ).to(self.device)
+            )
+            if self.device == 'cuda':
+                self.model.to(self.device)
+            # CPU compile (PyTorch 2+) for faster generation after first run
+            if self.device == 'cpu' and hasattr(torch, 'compile'):
+                try:
+                    self.model = torch.compile(self.model, mode='reduce-overhead')
+                    logger.info('Applied torch.compile for CPU optimization.')
+                except Exception:
+                    pass
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
             logger.info("Model loaded.")

@@ -7,6 +7,7 @@ from docchat.document_loader import DocumentLoader
 from docchat.chunking import TextChunker
 from docchat.embeddings import EmbeddingGenerator, ChromaDBManager
 from docchat.rag_pipeline import RAGPipeline
+from docchat.model_downloader import download_redpajama
 from docchat.config import Config
 from docchat.logging_setup import setup_logging
 from rich.console import Console
@@ -31,6 +32,16 @@ class DocChatApp:
         self.chroma_manager = ChromaDBManager(persist_directory=str(config.vectorstore_path))
         # Use model name (HF repo) instead of local GGUF path for RedPajama
         model_id = config.llm_model_name if hasattr(config, 'llm_model_name') else "togethercomputer/RedPajama-INCITE-7B-Instruct"
+        # Optional explicit download to local folder to avoid repeated cache fetch; optimize for faster generation
+        if getattr(config, 'llm_auto_download', True):
+            local_dir = Path('./model/redpajama')
+            if not local_dir.exists() or not any(local_dir.glob('pytorch_model-*.bin')):
+                self.logger.info("RedPajama model missing locally. Downloading shards to %s ...", local_dir)
+                download_redpajama(local_dir)
+                model_id = str(local_dir.resolve())
+            else:
+                # Use local copy if present
+                model_id = str(local_dir.resolve())
         self.rag_pipeline = RAGPipeline(
             embedding_model=config.embedding_model,
             chroma_persist_dir=str(config.vectorstore_path),

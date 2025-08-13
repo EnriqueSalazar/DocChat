@@ -2,7 +2,8 @@ docs_path: ./docs
 chunk_size: 1000
 chunk_overlap: 200
 embedding_model: all-MiniLM-L6-v2
-llm_model_path: ./model/mistral-7b-instruct-v0.2.Q6_K.gguf
+llm_model_name: togethercomputer/RedPajama-INCITE-7B-Instruct
+llm_auto_download: true
 top_k: 4
 vectorstore_path: ./chromadb
 history_dir: ./history
