@@ -40,9 +40,8 @@ class DocChatApp:
         config.history_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self):
-        """Run the main application loop."""
-        self.logger.info("Starting DocChat...")
-        self.process_documents()
+        """Start chat loop (no ingestion here)."""
+        self.logger.info("Starting DocChat chat session...")
         self.logger.info("Welcome to DocChat! Type 'exit' or 'quit' to end.")
         self.chat_loop()
 

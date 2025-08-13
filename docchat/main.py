@@ -10,7 +10,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from docchat.app import DocChatApp
 from docchat.config import Config
 
-cli = typer.Typer(help="DocChat CLI – Ingest documents and chat locally with RAG", invoke_without_command=True, no_args_is_help=True)
+cli = typer.Typer(
+    help="DocChat CLI – Ingest documents and chat locally with RAG",
+    invoke_without_command=True,
+    add_completion=False,  # hide completion install/show options
+)
 
 
 def find_model_path() -> Path | None:
@@ -42,11 +46,21 @@ def ingest(
     cfg = build_config(docs_folder)
     app = DocChatApp(cfg)
     app.process_documents()
-    # After ingestion always go to chat
-    if not cfg.llm_model_path:
-        typer.secho("No GGUF model found. Set llm_model_path in config.yaml or put a .gguf in ./model", fg=typer.colors.RED)
-        raise typer.Exit(1)
-    app.run()
+    # Pause before starting chat only if interactive
+    if sys.stdin.isatty():
+        try:
+            typer.echo("\nIngestion complete. Press Enter to continue to chat...")
+            input()
+        except (KeyboardInterrupt, EOFError):
+            raise typer.Exit(1)
+    else:
+        typer.echo("(Non-interactive mode: skipping chat after ingestion)")
+    # After ingestion always go to chat if interactive
+    if sys.stdin.isatty():
+        if not cfg.llm_model_path:
+            typer.secho("No GGUF model found. Set llm_model_path in config.yaml or put a .gguf in ./model", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        app.run()
 
 
 @cli.command()
@@ -66,9 +80,18 @@ def chat(
 def main_callback(ctx: typer.Context, docs_folder: Annotated[Path, typer.Option(help="Folder with documents", exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True)] = Path("./docs")):
     """Default behavior: show help (implicitly) then launch chat if no subcommand supplied."""
     if ctx.invoked_subcommand is not None:
-        return
-    # Show help intentionally (since invoke_without_command + no_args_is_help) then proceed
+        return  # Another command will run
+    # Show help manually (since we removed no_args_is_help)
     typer.echo(ctx.get_help())
+    if not sys.stdin.isatty():
+        typer.echo("(Non-interactive mode: chat skipped)")
+        return
+    # Interactive: pause then chat
+    try:
+        typer.echo("\nPress Enter to start chat...")
+        input()
+    except (KeyboardInterrupt, EOFError):
+        raise typer.Exit(1)
     cfg = build_config(docs_folder)
     if not cfg.llm_model_path:
         typer.secho("No GGUF model found. Set llm_model_path in config.yaml or put a .gguf in ./model", fg=typer.colors.RED)
